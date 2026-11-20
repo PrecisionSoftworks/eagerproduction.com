@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Eager Production — Web · Software · Automation</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23064a24'/%3E%3Crect x='3' y='5' width='26' height='22' rx='2' fill='%23091311'/%3E%3Cpath d='M12 10 L23 16 L12 22 Z' fill='%232bff7e'/%3E%3C/svg%3E">
 <meta name="description" content="Eager Production builds websites, custom software and business automation — with a wow factor.">
 <link href="fonts/fonts.css" rel="stylesheet">
 <style>
@@ -1075,43 +1076,80 @@ dialog.bsod::backdrop { background: #0000aa; }
     return window.matchMedia('(hover: hover) and (pointer: fine)').matches && window.innerWidth >= 768;
   }
 
+  var dragTopZ = 10;
+
   function makeDraggable(win, titlebar) {
     if (!win || !titlebar) return;
-    var sx = 0, sy = 0, dx = 0, dy = 0, dragging = false, home = null;
+    var dx = 0, dy = 0, dragging = false;
+    // captured at pointerdown, all in document coordinates so scrolling
+    // and viewport resizes mid-drag never invalidate them
+    var layoutX = 0, layoutY = 0, grabDX = 0, grabDY = 0;
 
-    titlebar.addEventListener('pointerdown', function (e) {
-      if (!canDrag() || dragging) return;
-      if (e.target.closest('button, input, a')) return;
-      dragging = true;
-      home = win.getBoundingClientRect();
-      sx = e.clientX - dx; sy = e.clientY - dy;
-      win.style.zIndex = '60';
-      win.classList.add('dragging');
-      try { titlebar.setPointerCapture(e.pointerId); } catch (err) {}
-      e.preventDefault();
-    });
-    titlebar.addEventListener('pointermove', function (e) {
-      if (!dragging || !home) return;
-      var tH = 48;
-      var minDx = 12 - home.left;
-      var maxDx = window.innerWidth - 12 - home.right;
-      var minDy = 8 - home.top;
-      var maxDy = window.innerHeight - tH - home.bottom;
-      dx = Math.min(maxDx, Math.max(minDx, e.clientX - sx));
-      dy = Math.min(maxDy, Math.max(minDy, e.clientY - sy));
+    function taskbarH() {
+      var v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--taskbar-h'));
+      return isFinite(v) && v > 0 ? v : 44;
+    }
+
+    function onMove(e) {
+      if (!dragging) return;
+      // desired window position, document space, live viewport bounds
+      var left = e.clientX + window.pageXOffset - grabDX;
+      var top = e.clientY + window.pageYOffset - grabDY;
+      left = Math.max(window.pageXOffset + 12,
+        Math.min(left, window.pageXOffset + window.innerWidth - 12 - win.offsetWidth));
+      top = Math.max(window.pageYOffset + 8,
+        Math.min(top, window.pageYOffset + window.innerHeight - taskbarH() - win.offsetHeight));
+      dx = left - layoutX;
+      dy = top - layoutY;
       win.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
-    });
+    }
+
     function endDrag() {
       if (!dragging) return;
       dragging = false;
       win.classList.remove('dragging');
-      win.style.zIndex = '';
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', endDrag);
+      window.removeEventListener('pointercancel', endDrag);
+      // dragged window stays above the others, like a real OS
+      win.style.zIndex = String(dragTopZ++);
     }
-    titlebar.addEventListener('pointerup', endDrag);
-    titlebar.addEventListener('pointercancel', endDrag);
+
+    titlebar.addEventListener('pointerdown', function (e) {
+      if (!canDrag() || dragging) return;
+      if (e.button !== 0 || e.isPrimary === false) return;
+      if (e.target.closest('button, input, a, select, textarea')) return;
+      var r = win.getBoundingClientRect();
+      layoutX = r.left + window.pageXOffset - dx; // untransformed layout position
+      layoutY = r.top + window.pageYOffset - dy;
+      grabDX = e.clientX - r.left;
+      grabDY = e.clientY - r.top;
+      dragging = true;
+      win.style.zIndex = String(dragTopZ++);
+      win.classList.add('dragging');
+      try { titlebar.setPointerCapture(e.pointerId); } catch (err) {}
+      e.preventDefault();
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', endDrag);
+      window.addEventListener('pointercancel', endDrag);
+    });
+    titlebar.addEventListener('lostpointercapture', endDrag);
     titlebar.addEventListener('dblclick', function () {
       dx = 0; dy = 0;
       win.style.transform = '';
+    });
+
+    // reset offset state too — clearing only the transform makes the next
+    // drag teleport the window by the pre-resize offset
+    window.addEventListener('resize', function () {
+      dragging = false;
+      dx = 0; dy = 0;
+      win.classList.remove('dragging');
+      win.style.transform = '';
+      win.style.zIndex = '';
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', endDrag);
+      window.removeEventListener('pointercancel', endDrag);
     });
   }
 
@@ -1122,10 +1160,6 @@ dialog.bsod::backdrop { background: #0000aa; }
   makeDraggable($('contact'), $('contactTitlebar'));
 
   window.addEventListener('resize', function () {
-    document.querySelectorAll('.win').forEach(function (w) {
-      w.style.transform = '';
-      w.style.zIndex = '';
-    });
     sizeViz();
   });
 
