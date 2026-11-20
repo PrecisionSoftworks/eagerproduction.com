@@ -5,9 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Eager Production — Web · Software · Automation</title>
 <meta name="description" content="Eager Production builds websites, custom software and business automation — with a wow factor.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Handjet:wght@400..700&display=swap" rel="stylesheet">
+<link href="fonts/fonts.css" rel="stylesheet">
 <style>
 @layer od-layout {
   [hidden]:not([hidden="until-found" i]) { display: none !important; }
@@ -71,14 +69,14 @@
   --c-amber: #ffb000;
   --c-ink: #101010;
   --c-link: #0000cc;
-  --px: "Press Start 2P", monospace;
-  --lcd-font: "VT323", "Courier New", monospace;
-  --body-font: Tahoma, Verdana, Segoe UI, sans-serif;
+  --px: "Press Start 2P", "Eager Symbols", monospace;
+  --lcd-font: "VT323", "Eager Symbols", "Courier New", monospace;
+  --body-font: Tahoma, Verdana, "Eager Symbols", "Segoe UI", sans-serif;
   --taskbar-h: 44px;
   --od-icon-size: 16px;
 }
 
-html[lang="bg"] { --lcd-font: "Handjet", "VT323", "Courier New", monospace; }
+html[lang="bg"] { --lcd-font: "Handjet", "VT323", "Eager Symbols", "Courier New", monospace; }
 html[lang="bg"] :where(.hero-sub, .lcd, .lcd-time, .pl-row, .bsod) { font-weight: 500; }
 
 * { box-sizing: border-box; }
