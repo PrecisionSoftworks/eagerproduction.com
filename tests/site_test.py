@@ -53,20 +53,23 @@ CHECK_GLOBAL = """() => {
   return bad;
 }"""
 
-# Per-window: immediately after ITS drag — must be inside the viewport
-# (±1 px) and above the taskbar, at the scroll position it was dragged at.
-# (Windows dragged earlier may legitimately be scrolled off-screen now.)
+# Per-window: immediately after ITS drag — the titlebar must be fully
+# visible (±6 px) and above the taskbar at the scroll position it was
+# dragged at, and the window's left/right edges inside the viewport.
+# The window BODY may legitimately hang below the fold / behind the
+# taskbar, like a real window manager.
 CHECK_ONE = """(id) => {
   const w = document.getElementById(id);
   if (!w) return ['no such window ' + id];
   const r = w.getBoundingClientRect();
+  const t = w.querySelector('.win-title').getBoundingClientRect();
   const tb = document.querySelector('.taskbar');
   const tbTop = tb ? tb.getBoundingClientRect().top : innerHeight;
-  const bad = [], TOL = 1;
+  const bad = [], TOL = 6;
+  if (t.top < -TOL) bad.push(id + ' titlebar top ' + t.top.toFixed(1));
+  if (t.bottom > tbTop + TOL) bad.push(id + ' titlebar under taskbar ' + t.bottom.toFixed(1) + ' > ' + tbTop.toFixed(1));
   if (r.left < -TOL) bad.push(id + ' left ' + r.left.toFixed(1));
-  if (r.top < -TOL) bad.push(id + ' top ' + r.top.toFixed(1));
   if (r.right > innerWidth + TOL) bad.push(id + ' right ' + r.right.toFixed(1) + ' > ' + innerWidth);
-  if (r.bottom > tbTop + TOL) bad.push(id + ' bottom ' + r.bottom.toFixed(1) + ' under taskbar ' + tbTop.toFixed(1));
   return bad;
 }"""
 
@@ -186,20 +189,42 @@ async def drag_suite(page, failed):
         bad = await drag(page, w, t)
         if bad:
             failed.append(('post-cancel-drag', w, bad))
-    # 5. rapid-fire drags on one window (state accumulation)
+    # 5. no-jump-on-grab: windows that hang below the fold must follow the
+    #    pointer smoothly instead of teleporting fully into view
+    for w, t in WINS:
+        await page.locator(f'#{w}').scroll_into_view_if_needed()
+        before = await page.evaluate(
+            """(id) => { const r = document.getElementById(id).getBoundingClientRect();
+                          return [r.left, r.top]; }""", w)
+        box = await page.locator(f'#{w} {t}').bounding_box()
+        await page.mouse.move(box['x'] + box['width'] / 2, box['y'] + 8)
+        await page.mouse.down()
+        await page.mouse.move(box['x'] + box['width'] / 2 + 4, box['y'] + 12, steps=2)
+        await page.mouse.up()
+        await asyncio.sleep(0.05)
+        after = await page.evaluate(
+            """(id) => { const r = document.getElementById(id).getBoundingClientRect();
+                          return [r.left, r.top]; }""", w)
+        moved = ((after[0] - before[0]) ** 2 + (after[1] - before[1]) ** 2) ** 0.5
+        if moved > 15:
+            failed.append(('no-jump-on-grab', w, [f'moved {moved:.1f}px on a 5px nudge']))
+        bad = await page.evaluate(CHECK_GLOBAL) + await page.evaluate(CHECK_ONE, w)
+        if bad:
+            failed.append(('no-jump-on-grab-check', w, bad))
+    # 6. rapid-fire drags on one window (state accumulation)
     for i in range(6):
         await page.locator('#player').scroll_into_view_if_needed()
         bad = await drag(page, 'player', '.win-title', steps=25)
         if bad:
             failed.append((f'rapid{i}', 'player', bad))
-    # 6. double-click reset, then drag again
+    # 7. double-click reset, then drag again
     await page.locator('#player').scroll_into_view_if_needed()
     await page.locator('#player .win-title').dblclick()
     await page.wait_for_timeout(100)
     bad = await drag(page, 'player', '.win-title')
     if bad:
         failed.append(('dblclick', 'player', bad))
-    # 7. stacking: the last dragged window must sit above every other window
+    # 8. stacking: the last dragged window must sit above every other window
     z_player = await page.evaluate("parseInt(document.querySelector('#player').style.zIndex||'0')")
     others = await page.evaluate("""() => ['services','process','about','contact']
         .map(id => parseInt(document.getElementById(id).style.zIndex||'0'))""")

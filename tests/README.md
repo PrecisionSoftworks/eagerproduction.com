@@ -23,9 +23,9 @@ Exit code `0` = clean, `1` = failures listed as `(scenario, window, violations)`
 
 ## What the drag suite covers
 
-Every scenario re-checks after each drag that no dragged window escaped the
-viewport (±1 px) or slid under the taskbar, that no window got stuck with a
-`dragging` class, and that no legacy state (`zIndex 60`) survives.
+Every scenario re-checks after each drag that no window got stuck with a
+`dragging` class, and that no legacy state (`zIndex 60`) survives. Bounds
+assertions are described below the table.
 
 | Scenario | Regression it guards against |
 |---|---|
@@ -33,9 +33,17 @@ viewport (±1 px) or slid under the taskbar, that no window got stuck with a
 | mouse-wheel scroll held mid-drag, up and down | bounds captured once at `pointerdown` going stale (windows dragged outside the viewport) |
 | 4 viewport resizes between drags | internal `dx/dy` not reset on resize (window teleports on next drag) |
 | `pointercancel` mid-drag, then dragging again | lost capture bricking a window's drag forever |
+| no-jump-on-grab (5px nudge per window) | clamping the whole window instead of its titlebar — a window hanging below the fold must follow the pointer, not teleport into view |
 | 6 rapid-fire drags on the player | state accumulation on one window |
 | double-click reset, then drag | reset path consistency |
 | stacking check | dragged window must end up above all others |
+
+After each drag the suite re-checks that the just-dragged window's **titlebar**
+is fully visible (±6 px) and above the taskbar at its drag-time scroll
+position, and that the window's left/right edges stayed inside the viewport.
+The window body is allowed to hang below the fold or behind the taskbar —
+like a real window manager, only the titlebar must stay reachable. Windows
+dragged earlier may legitimately be scrolled off-screen.
 
 Before every grab the suite verifies with `elementFromPoint` that the intended
 window actually owns the click point. If an earlier-dragged window covers the
